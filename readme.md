@@ -7,17 +7,17 @@ lege repository die je als template kan gebruiken om een eigen repository te sta
   
 ## specifications
 
-microcontroller:
+microcontroller: Nodemcu ESP28622 V3
 
-motors: 
+motors: (30:1/50:1) micro metal gearbox HP 6V - pololu (wss naar 50:1)
 
-h-bridge:
+h-bridge: DRV8835
 
-sensors:
+sensors: QTR-8A
 
-batteries:
+batteries: 18650 - 3.7x2V; 2.6A
 
-wireless communication:
+wireless communication: See microcontroller
 
 distance sensor - motors:
 

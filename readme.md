@@ -5,13 +5,13 @@ lege repository die je als template kan gebruiken om een eigen repository te sta
 ![A description of my image](images/empty.png)
 
   
-## specifications
+## specifications (Plan B)
 
-microcontroller: Nodemcu ESP28622 V3
+microcontroller: ESP32 (Devkit V1)
 
-motors: (30:1/50:1) micro metal gearbox HP 6V - pololu (wss naar 50:1)
+motors: (50:1) micro metal gearbox HP 6V - pololu
 
-h-bridge: DRV8835
+h-bridge: DRV8833
 
 sensors: QTR-8A
 

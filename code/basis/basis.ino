@@ -1,10 +1,12 @@
 #include <WiFi.h>
 #include <WebServer.h>
+#include <Preferences.h>
 
 const char* ssid     = "Tibo123";
 const char* password = "876543210";
 
 WebServer server(80);
+Preferences prefs; // voor opslag in flash
 
 // Application state
 bool running = false;
@@ -51,7 +53,6 @@ String pageTemplate = R"rawliteral(
 // Helper to send the page with dynamic values
 void sendPage() {
   String page = pageTemplate;
-  // Replace placeholders with current values
   page.replace("%STATUS%", running ? "Running" : "Stopped");
   page.replace("%P%", String(P, 2));
   page.replace("%I%", String(I, 2));
@@ -71,26 +72,44 @@ void handleToggle() {
 }
 
 void handleSet() {
+  bool updated = false;
+
   if (server.hasArg("P")) {
     String pArg = server.arg("P");
     P = pArg.toFloat();
     Serial.printf("New P = %f\n", P);
+    updated = true;
   }
   if (server.hasArg("I")) {
     String iArg = server.arg("I");
     I = iArg.toFloat();
     Serial.printf("New I = %f\n", I);
+    updated = true;
   }
   if (server.hasArg("D")) {
     String dArg = server.arg("D");
     D = dArg.toFloat();
     Serial.printf("New D = %f\n", D);
+    updated = true;
   }
+
+  // Opslaan in flash als er iets gewijzigd is
+  if (updated) {
+    prefs.begin("pid", false);
+    prefs.putFloat("P", P);
+    prefs.putFloat("I", I);
+    prefs.putFloat("D", D);
+    prefs.end();
+    Serial.println("PID parameters saved to flash.");
+  }
+
   sendPage();
 }
 
 void setup() {
   Serial.begin(115200);
+
+  // WiFi verbinding
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED) {
@@ -101,23 +120,29 @@ void setup() {
   Serial.print("Connected, IP: ");
   Serial.println(WiFi.localIP());
 
+  // PID-waarden laden uit flash
+  prefs.begin("pid", true);
+  P = prefs.getFloat("P", 1.00);  // standaardwaarden
+  I = prefs.getFloat("I", 0.00);
+  D = prefs.getFloat("D", 0.00);
+  prefs.end();
+  Serial.printf("Loaded PID: P=%.2f, I=%.2f, D=%.2f\n", P, I, D);
+
   server.on("/", HTTP_GET, handleRoot);
   server.on("/toggle", HTTP_POST, handleToggle);
   server.on("/set", HTTP_POST, handleSet);
   server.begin();
 
-    pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void loop() {
   server.handleClient();
 
-  // Here you can add logic for PID control, running when 'running' is true
   if (running) {
     digitalWrite(LED_BUILTIN, HIGH);
-    // Example: control logic using P, I, and D
-    // Use the P, I, D values here to control a system or process
-  } else { 
+    // PID-regeling zou hier komen
+  } else {
     digitalWrite(LED_BUILTIN, LOW);
   }
 }

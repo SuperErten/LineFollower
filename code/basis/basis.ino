@@ -1,6 +1,10 @@
 #include <WiFi.h>
 #include <WebServer.h>
+#include <QTRSensors.h>
 #include <Preferences.h>
+
+#include <L298N.h>
+
 
 const char* ssid     = "Tibo123";
 const char* password = "876543210";
@@ -8,11 +12,50 @@ const char* password = "876543210";
 WebServer server(80);
 Preferences prefs; // voor opslag in flash
 
+
 // Application state
 bool running = false;
 float P = 0.0;
 float I = 0.0;
 float D = 0.0;
+
+#define AIN1 21  //Assign the motor pins
+#define BIN1 25
+#define AIN2 22
+#define BIN2 33
+#define PWMA 23
+#define PWMB 32
+#define STBY 19
+
+L298N motor1(PWMA, AIN1, AIN2);
+L298N motor2(PWMB, BIN1, BIN2);
+
+const uint8_t SensorCount = 8;
+uint16_t sensorValues[SensorCount];
+int threshold[SensorCount];
+
+uint8_t multiP = 1;
+uint8_t multiI  = 1;
+uint8_t multiD = 1;
+uint8_t Kpfinal;
+uint8_t Kifinal;
+uint8_t Kdfinal;
+float Pvalue;
+float Ivalue;
+float Dvalue;
+
+int val, cnt = 0, v[3];
+
+uint16_t position;
+int P, D, I, previousError, PIDvalue, error;
+int lsp, rsp;
+int lfspeed = 230;
+
+// NOTE: The first pin must always be PWM capable, the second only, if the last parameter is set to "true"
+// SYNTAX: IN1, IN2, min. input value, max. input value, neutral position width
+// invert rotation direction, true = both pins are PWM capable
+DRV8833 Motor1(motor1_in1, motor1_in2, 0, 1023, 60, false, true); // Motor 1
+DRV8833 Motor2(motor2_in1, motor2_in2, 0, 1023, 60, false, true); // Motor 2
 
 // HTML page template
 String pageTemplate = R"rawliteral(
@@ -141,8 +184,72 @@ void loop() {
 
   if (running) {
     digitalWrite(LED_BUILTIN, HIGH);
-    // PID-regeling zou hier komen
+    // robotControl()
   } else {
     digitalWrite(LED_BUILTIN, LOW);
+  }
+}
+
+void robotControl(){
+  // read calibrated sensor values and obtain a measure of the line position
+  // from 0 to 4000
+  position = qtr.readLineBlack(sensorValues);
+  error = 2000 - position;
+  while(sensorValues[0]>=980 && sensorValues[1]>=980 && sensorValues[2]>=980 && sensorValues[3]>=980 && sensorValues[4]>=980){ // A case when the line follower leaves the line
+    if(previousError>0){       //Turn left if the line was to the left before
+      motorDrive(-230,230);
+    } else {
+      motorDrive(230,-230); // Else turn right
+    }
+    position = qtr.readLineBlack(sensorValues);
+  }
+  calculationPID(error);
+}
+
+void calculationPID(int error){
+    P = error;
+    I = I + error;
+    D = error - previousError;
+    
+    Pvalue = (Kp/pow(10,multiP))*P;
+    Ivalue = (Ki/pow(10,multiI))*I;
+    Dvalue = (Kd/pow(10,multiD))*D; 
+
+    float PIDvalue = Pvalue + Ivalue + Dvalue;
+    previousError = error;
+
+    lsp = lfspeed - PIDvalue;
+    rsp = lfspeed + PIDvalue;
+
+    if (lsp > 255) {
+      lsp = 255;
+    }
+    if (lsp < -255) {
+      lsp = -255;
+    }
+    if (rsp > 255) {
+      rsp = 255;
+    }
+    if (rsp < -255) {
+      rsp = -255;
+    }
+    motorDrive(lsp,rsp);
+}
+
+void motorDrive(int left, int right){
+  if(right>0) {
+    motor2.setSpeed(right);
+    motor2.forward();
+  } else {
+    motor2.setSpeed(right);
+    motor2.backward();
+  }
+  
+  if(left>0) {
+    motor1.setSpeed(left);
+    motor1.forward();
+  } else {
+    motor1.setSpeed(left);
+    motor1.backward();
   }
 }

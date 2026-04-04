@@ -8,7 +8,6 @@ volatile unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 200;
 
 void IRAM_ATTR toggleState() {
-
     interruptTriggerd = 1;
 }
 
@@ -49,8 +48,6 @@ void loop() {
   }
 
   if (stateRobot) {
-    digitalWrite(PIN_DO_LED_RED, 0);
-    digitalWrite(PIN_DO_LED_GREEN, 1);
     startRobot();
   }
 }

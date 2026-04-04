@@ -7,6 +7,22 @@ volatile bool interruptTriggerd = 0;
 volatile unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 200;
 
+void IRAM_ATTR toggleState() {
+
+    interruptTriggerd = 1;
+}
+
+void updateLEDs() {
+
+  digitalWrite(PIN_DO_LED_RED,   !stateRobot);
+  digitalWrite(PIN_DO_LED_GREEN,  stateRobot);
+}
+
+void startRobot() {
+
+  Serial.println("Robot Started");
+}
+
 void setup() {
 
   Serial.begin(115200);
@@ -16,6 +32,7 @@ void setup() {
   pinMode(PIN_DO_LED_RED , OUTPUT);
 
   attachInterrupt(digitalPinToInterrupt(PIN_DI_START_STOP), toggleState, FALLING);
+  updateLEDs();
 }
 
 void loop() {
@@ -27,12 +44,8 @@ void loop() {
     if (now - lastDebounceTime > debounceDelay) {
       stateRobot = !stateRobot;
       lastDebounceTime = now;
+      updateLEDs();
     }
-  }
-
-  if (stateRobot == 0) {
-    digitalWrite(PIN_DO_LED_RED , 1);
-    digitalWrite(PIN_DO_LED_GREEN, 0);
   }
 
   if (stateRobot) {
@@ -40,14 +53,4 @@ void loop() {
     digitalWrite(PIN_DO_LED_GREEN, 1);
     startRobot();
   }
-}
-
-void toggleState() {
-
-    interruptTriggerd = 1;
-}
-
-void startRobot() {
-
-  Serial.print("Robot Started");
 }

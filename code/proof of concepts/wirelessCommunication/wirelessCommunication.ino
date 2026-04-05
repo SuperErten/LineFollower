@@ -92,13 +92,11 @@ void mainLoop(void* pvParameters) {
     if (interruptTriggerd) {
       interruptTriggerd = false;
       unsigned long now = millis();
-
       if (now - lastDebounceTime > debounceDelay) {
         lastDebounceTime = now;
         portENTER_CRITICAL(&stateMux);
         stateRobot = !stateRobot;
         portEXIT_CRITICAL(&stateMux);
-        
         updateLEDs();
       }
     }

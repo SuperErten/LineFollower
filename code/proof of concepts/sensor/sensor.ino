@@ -62,8 +62,8 @@ void setup() {
   pinMode(PIN_DO_LED_RED , OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
 
-  qtr.setTypeRC();
-  qtr.setSensorPins((const uint8_t[]){26, 36, 39, 34, 35, 32, 33, 25}, SensorCount);
+  qtr.setTypeAnalog();
+  qtr.setSensorPins((const uint8_t[]){26, 36, 39, 34, 35, 32, 33, 25}, SensorCount); // 
 
   attachInterrupt(digitalPinToInterrupt(PIN_DI_START_STOP), toggleState, FALLING);
   updateLEDs();

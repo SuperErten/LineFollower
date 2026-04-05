@@ -37,29 +37,29 @@ void loop()
         command.toLowerCase(); // convert it to lowercase
 
         if (command.equals("swap")) {
-            myMotor.swapDirection(true); // swap rotation direction
+            motorA.swapDirection(true); // swap rotation direction
             Serial.println("--> swapped rotation direction.");
         }
         else if (command.equals("noswap")) {
-            myMotor.swapDirection(false); // default rotation direction
+            motorA.swapDirection(false); // default rotation direction
             Serial.println("--> default rotation direction.");
         }
         else if (command.equals("slow")) {
-            myMotor.setDecayMode(drv8833DecaySlow); // decay mode SLOW
+            motorA.setDecayMode(drv8833DecaySlow); // decay mode SLOW
             Serial.println("--> Decay mode SLOW - good torque.");
         }
         else if (command.equals("fast")) {
-            myMotor.setDecayMode(drv8833DecayFast); // decay mode FAST
+            motorA.setDecayMode(drv8833DecayFast); // decay mode FAST
             Serial.println("--> Decay mode FAST - poor torque.");
         }
         else if (command.equals("stop")) {
-            myMotor.stop(); // stop moto rotation
+            motorA.stop(); // stop moto rotation
             Serial.println("--> Motor stopped.");
         }
         else if (command.startsWith("move")) {
             command.replace("move", ""); // remove the word "move"
             command.replace(" ", "");    // remove spaces (if present)
-            myMotor.move(command.toInt()); // start rotation at desired speed
+            motorA.move(command.toInt()); // start rotation at desired speed
             Serial.printf("--> Motor rotation speed: %ld.\n", command.toInt());
         }
     }

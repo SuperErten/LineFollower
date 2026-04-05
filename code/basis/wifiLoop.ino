@@ -157,7 +157,7 @@ static const char pageTemplate[] PROGMEM = R"rawliteral(
         <form action="/set" method="POST">
           <div class="pid-row">
             <label>P</label>
-            <input type="number" step="0.01" name="P" value="%P%">
+            <input type="number" step="0.01" name="P" value="%P%"> 
           </div>
           <div class="pid-row">
             <label>I</label>
@@ -227,6 +227,13 @@ void handleSet() {
   if (server.hasArg("I")) I = server.arg("I").toFloat();
   if (server.hasArg("D")) D = server.arg("D").toFloat();
   portEXIT_CRITICAL(&stateMux);
+
+  prefs.begin("pid", false);
+  prefs.putFloat("P", P);
+  prefs.putFloat("I", I);
+  prefs.putFloat("D", D);
+  prefs.end(); 
+  
   sendPage();
 }
 

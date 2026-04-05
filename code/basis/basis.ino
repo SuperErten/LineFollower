@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <QTRSensors.h>
+#include <Preferences.h>
 
 constexpr uint8_t PIN_DI_START_STOP = 13;
 constexpr uint8_t PIN_DO_LED_RED    = 14;
@@ -18,11 +19,13 @@ const char* ssid     = "Tibo123";
 const char* password = "876543210";
 
 volatile bool stateRobot = 0;
-volatile float P       = 0.0;
-volatile float I       = 0.0;
-volatile float D       = 0.0;
+volatile float P = 0;
+volatile float I = 0;
+volatile float D = 0;
 
 WebServer server(80);
+
+Preferences prefs;
 
 //Maar één core kan globaal data aanpassen.
 portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
@@ -71,6 +74,12 @@ void setup() {
 
   Serial.begin(115200);
 
+  prefs.begin("pid", false);
+  P = prefs.getFloat("P", 0.0);
+  I = prefs.getFloat("I", 0.0);
+  D = prefs.getFloat("D", 0.0);
+  prefs.end(); 
+  
   pinMode(PIN_DI_START_STOP, INPUT_PULLUP);
   pinMode(PIN_DO_LED_GREEN, OUTPUT);
   pinMode(PIN_DO_LED_RED , OUTPUT);
@@ -98,7 +107,7 @@ void mainLoop(void* pvParameters) {
         portENTER_CRITICAL(&stateMux);
         stateRobot = !stateRobot;
         portEXIT_CRITICAL(&stateMux);
-        
+
         updateLEDs();
       }
     }

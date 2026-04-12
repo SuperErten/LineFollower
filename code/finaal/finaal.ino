@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <PID_v1.h>
 #include <WebServer.h>
 #include <QTRSensors.h>
 #include <Preferences.h>
@@ -13,7 +14,7 @@ QTRSensors qtr;
 const uint8_t SensorCount = 8;
 uint16_t sensorValues[SensorCount];
 
-volatile bool interruptTriggerd = 0;
+volatile bool interruptTriggerd = false;
 volatile unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 100; //ms
 
@@ -27,6 +28,13 @@ volatile float Kd = 0;
 
 float P = 0, I = 0, D = 0;
 
+unsigned long lastTime;
+float inputPID, outputPID
+float ITerm, lastInputPID;
+float outMinPID, outMaxPID;
+float setpointPID = 4000;
+int sampleTimePID = 15000; // 15 ms Sample Time
+
 Preferences prefs;
 
 WebServer server(80);
@@ -38,10 +46,10 @@ portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
 
 void IRAM_ATTR toggleState() {
 
-    interruptTriggerd = 1;
+    interruptTriggerd = true;
 }
 
-static bool IRAM_ATTR timer_callback(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data) {
+static bool IRAM_ATTR timerCallback(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data) {
 
     BaseType_t higher_priority_woken = pdFALSE;
     vTaskNotifyGiveFromISR(pid_compute_handle, &higher_priority_woken);
@@ -68,13 +76,13 @@ void readValuesQTR() {
 
 void calibrateQTR() {
 
-  digitalWrite(LED_BUILTIN, 1);
+  digitalWrite(LED_BUILTIN, true);
 
   for (uint16_t i = 0; i < 400; i++)
   {
     qtr.calibrate();
   }
-  digitalWrite(LED_BUILTIN, 0); 
+  digitalWrite(LED_BUILTIN, false); 
 }
 
 void startRobot() {
@@ -82,11 +90,34 @@ void startRobot() {
   readValuesQTR();
 }
 
-void pidCompute(void *pvParameters) {
-    while (1) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+void SetOutputLimits(double Min, double Max)
+{
+   if(Min > Max) return;
+   outMinPID = Min;
+   outMaxPID = Max;
+    
+   if(outputPID > outMaxPID) outputPID = outMaxPID;
+   else if(outputPID < outMinPID) outputPID = outMinPID;
+ 
+   if(ITerm> outMaxPID) ITerm= outMaxPID;
+   else if(ITerm< outMinPID) ITerm= outMinPID;
+}
 
-        // PID berkening
+void pidCompute(void *pvParameters) {
+  
+    while (true) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        double error = setpointPID - inputPID;
+        ITerm+= (Ki * error);
+        if(ITerm> outMaxPID) ITerm= outMaxPID;
+        else if(ITerm< outMinPID) ITerm= outMinPID;
+        double dInput = (inputPID - lastInputPID);
+    
+        outputPID = Kp * error + ITerm- Kd * dInput;
+        if(outputPID > outMaxPID) outputPID = outMaxPID;
+        else if(outputPID < outMinPID) outputPID = outMinPID;
+    
+        lastInputPID = inputPID;
     }
 }
 
@@ -95,9 +126,9 @@ void setup() {
   Serial.begin(115200);
 
   prefs.begin("pid", false);
-  P = prefs.getFloat("Kp", 0.0);
-  I = prefs.getFloat("Ki", 0.0);
-  D = prefs.getFloat("Kd", 0.0);
+  Kp = prefs.getFloat("Kp", 0.0);
+  Ki = prefs.getFloat("Ki", 0.0);
+  Kd = prefs.getFloat("Kd", 0.0);
   prefs.end(); 
   
   pinMode(PIN_DI_START_STOP, INPUT_PULLUP);
@@ -127,13 +158,13 @@ void setup() {
   gptimer_new_timer(&timer_config, &timer);
 
   gptimer_alarm_config_t alarm_config = {};
-  alarm_config.alarm_count = 15000; // 10 ms Sample Time
+  alarm_config.alarm_count = sampleTimePID;
   alarm_config.reload_count = 0;
   alarm_config.flags.auto_reload_on_alarm = true;
   gptimer_set_alarm_action(timer, &alarm_config);
 
   gptimer_event_callbacks_t cbs = {};
-  cbs.on_alarm = timer_callback;
+  cbs.on_alarm = timerCallback;
   gptimer_register_event_callbacks(timer, &cbs, NULL);
 
   gptimer_enable(timer);

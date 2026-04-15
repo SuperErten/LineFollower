@@ -29,7 +29,7 @@ volatile float Kd = 0;
 float P = 0, I = 0, D = 0;
 
 unsigned long lastTime;
-float inputPID, outputPID
+float inputPID, outputPID;
 float ITerm, lastInputPID;
 float outMinPID, outMaxPID;
 float setpointPID = 4000;

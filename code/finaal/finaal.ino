@@ -46,14 +46,14 @@ portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
 
 void IRAM_ATTR toggleState() {
 
-    interruptTriggerd = true;
+  interruptTriggerd = true;
 }
 
 static bool IRAM_ATTR timerCallback(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data) {
 
-    BaseType_t higher_priority_woken = pdFALSE;
-    vTaskNotifyGiveFromISR(pid_compute_handle, &higher_priority_woken);
-    return higher_priority_woken == pdTRUE;
+  BaseType_t higher_priority_woken = pdFALSE;
+  vTaskNotifyGiveFromISR(pid_compute_handle, &higher_priority_woken);
+  return higher_priority_woken == pdTRUE;
 }
 
 void updateLEDs() {
@@ -64,7 +64,12 @@ void updateLEDs() {
 
 void readValuesQTR() {
 
-    uint16_t position = qtr.readLineBlack(sensorValues);
+  uint16_t position = qtr.readLineBlack(sensorValues);
+	
+  portENTER_CRITICAL(&stateMux);
+  inputPID = (float)position;
+  portEXIT_CRITICAL(&stateMux)
+
 
   for (uint8_t i = 0; i < SensorCount; i++) //Later Verwijderen
   {
@@ -87,7 +92,7 @@ void calibrateQTR() {
 
 void startRobot() {
 
-  readValuesQTR();
+   readValuesQTR();
 }
 
 void SetOutputLimits(double Min, double Max)
@@ -104,21 +109,46 @@ void SetOutputLimits(double Min, double Max)
 }
 
 void pidCompute(void *pvParameters) {
+	
+  const float dt = sampleTimePID / 1000000.0f; // 15000us -> 0.015S
   
-    while (true) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        double error = setpointPID - inputPID;
-        ITerm+= (Ki * error);
-        if(ITerm> outMaxPID) ITerm= outMaxPID;
-        else if(ITerm< outMinPID) ITerm= outMinPID;
-        double dInput = (inputPID - lastInputPID);
+   while (true) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+	  
+    // Snapshot (thread-safe) van variabelen die samen gebruikt worden
+    float input, setpoint, kp, ki, kd, outMin, outMax, iTerm, lastIn;
+    portENTER_CRITICAL(&stateMux);
+    input   = inputPID;
+    setpoint= setpointPID;
+    kp      = Kp;
+    ki      = Ki;
+    kd      = Kd;
+    outMin  = outMinPID;
+    outMax  = outMaxPID;
+    iTerm   = ITerm;
+    lastIn  = lastInputPID;
+    portEXIT_CRITICAL(&stateMux);
+
+    float error = setpoint - input;
+
+    iTerm += (ki * error * dt);
+    if (iTerm > outMax) iTerm = outMax;
+    else if (iTerm < outMin) iTerm = outMin;
+
     
-        outputPID = Kp * error + ITerm- Kd * dInput;
-        if(outputPID > outMaxPID) outputPID = outMaxPID;
-        else if(outputPID < outMinPID) outputPID = outMinPID;
+    float dInput = (input - lastIn) / dt;
+
+    float out = kp * error + iTerm - kd * dInput;
+    if (out > outMax) out = outMax;
+    else if (out < outMin) out = outMin;
     
-        lastInputPID = inputPID;
-    }
+    
+    portENTER_CRITICAL(&stateMux);
+    ITerm        = iTerm;
+    outputPID    = out;
+    lastInputPID = input;
+    portEXIT_CRITICAL(&stateMux);
+   }
 }
 
 void setup() {
@@ -181,6 +211,12 @@ void mainLoop(void* pvParameters) {
         lastDebounceTime = now;
         portENTER_CRITICAL(&stateMux);
         stateRobot = !stateRobot;
+		
+		if (!stateRobot) {
+		  ITerm = 0;
+		  outputPID = 0;
+		  lastInputPID = inputPID;
+		}
         portEXIT_CRITICAL(&stateMux);
 
         updateLEDs();
@@ -189,7 +225,6 @@ void mainLoop(void* pvParameters) {
 
     if (stateRobot) {
       startRobot();
-      vTaskDelay(250 / portTICK_PERIOD_MS);
     }
 
     vTaskDelay(10 / portTICK_PERIOD_MS);

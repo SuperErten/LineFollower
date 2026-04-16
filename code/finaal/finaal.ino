@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include <PID_v1.h>
+#include "Cdrv8833.h"
 #include <WebServer.h>
 #include <QTRSensors.h>
 #include <Preferences.h>
@@ -35,11 +35,27 @@ float outMinPID, outMaxPID;
 float setpointPID = 4000;
 int sampleTimePID = 15000; // 15 ms Sample Time
 
+constexpr uint8_t PIN_AIN1          = 19;
+constexpr uint8_t PIN_AIN2          = 18;
+constexpr uint8_t CHANNEL_MOTOR_A   = 0;
+constexpr bool SWAP_MOTOR_A         = 0;
+
+constexpr uint8_t PIN_BIN1          = 16;
+constexpr uint8_t PIN_BIN2          = 17;
+constexpr uint8_t CHANNEL_MOTOR_B   = 1;
+constexpr bool SWAP_MOTOR_B         = 0;
+
+int baseSpeed = 35;          // basis vooruit (0..100)
+int maxSpeed  = 80;          // clamp (0..100)
+
 Preferences prefs;
 
 WebServer server(80);
 
 TaskHandle_t pid_compute_handle = NULL;
+
+Cdrv8833 motorA(PIN_AIN1, PIN_AIN2, CHANNEL_MOTOR_A, SWAP_MOTOR_A);
+Cdrv8833 motorB(PIN_BIN1, PIN_BIN2, CHANNEL_MOTOR_B, SWAP_MOTOR_B);
 
 //Maar één core kan globaal data aanpassen.
 portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
@@ -90,11 +106,6 @@ void calibrateQTR() {
   digitalWrite(LED_BUILTIN, false); 
 }
 
-void startRobot() {
-
-   readValuesQTR();
-}
-
 void SetOutputLimits(double Min, double Max)
 {
    if(Min > Max) return;
@@ -110,12 +121,11 @@ void SetOutputLimits(double Min, double Max)
 
 void pidCompute(void *pvParameters) {
 	
-  const float dt = sampleTimePID / 1000000.0f; // 15000us -> 0.015S
+  const float dt = sampleTimePID / 1000000.0f;
   
    while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 	  
-    // Snapshot (thread-safe) van variabelen die samen gebruikt worden
     float input, setpoint, kp, ki, kd, outMin, outMax, iTerm, lastIn;
     portENTER_CRITICAL(&stateMux);
     input   = inputPID;
@@ -165,7 +175,10 @@ void setup() {
   pinMode(PIN_DO_LED_GREEN, OUTPUT);
   pinMode(PIN_DO_LED_RED , OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-
+  
+  motorA.setDecayMode(drv8833DecayFast);
+  motorB.setDecayMode(drv8833DecayFast);
+  
   qtr.setTypeAnalog();
   qtr.setSensorPins((const uint8_t[]){26, 36, 39, 34, 35, 32, 33, 25}, SensorCount); // 
 
@@ -224,10 +237,29 @@ void mainLoop(void* pvParameters) {
     }
 
     if (stateRobot) {
-      startRobot();
+      readValuesQTR();
+	  
+	  float out;
+      portENTER_CRITICAL(&stateMux);
+      out = outputPID;
+      portEXIT_CRITICAL(&stateMux);
+	  
+	  float steer = (out / 255.0f) * 100.0f;
+	  
+	  int left  = (int)roundf(baseSpeed + steer);
+	  int right = (int)roundf(baseSpeed - steer);
+	  
+	  left  = constrain(left,  -maxSpeed, maxSpeed);
+	  right = constrain(right, -maxSpeed, maxSpeed);
+	  
+      motorA.move((int8_t)left); 
+      motorB.move((int8_t)right);  
     }
-
-    vTaskDelay(10 / portTICK_PERIOD_MS);
+	else {
+	  motorA.brake();
+	  motorB.brake();
+	}
+	vTaskDelay(1 / portTICK_PERIOD_MS);
   }
 }
 
